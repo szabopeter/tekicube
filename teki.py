@@ -1,5 +1,7 @@
 #!env python3
 
+import itertools
+
 PLACEIDS = 'ABCDEF'
 
 ROT_NONE = ""
@@ -7,6 +9,7 @@ ROT_CLOCKW = "-90"
 ROT_COUNTER= "+90"
 ROT_180DEG = "180"
 ROTATIONS = ( ROT_NONE, ROT_CLOCKW, ROT_COUNTER, ROT_180DEG, )
+NO_ROTATIONS = ( ROT_NONE, )
 ROTATION_FROM_CODE = { '+' : ROT_CLOCKW, '-' : ROT_COUNTER, 'r' : ROT_180DEG }
 ROTATION_CODES = "".join(ROTATION_FROM_CODE.keys())
 ROTATION_VALUES = {
@@ -75,7 +78,10 @@ class Side(object):
 
     def rotated(self, rot):
         #TODO
-        return self
+        edgeclones = self.edges.copy()
+        clone = Side(self.name, edgeclones)
+        clone.rot = rot
+        return clone
 
     def getDisplayChar(self, x, y):
         if 0 < x < self.size-1 and 0 < y < self.size-1:
@@ -133,12 +139,16 @@ XX  X
 4
 A C E F
 C E F A
-8
-BC CD B+A A+D B-E ED+ FrB DFr
+2
+BC CD
  A
 BCD
  E
  F
+"""
+allHRules = """
+8
+BC CD B+A A+D B-E ED+ FrB DFr
 """
 
 def linefeed_generator():
@@ -178,6 +188,10 @@ class Arrangement(object):
         self.byid = {}
         for i, placeid in enumerate(PLACEIDS):
             self.byid[placeid] = i
+        #print("Arrangement created: "+("-".join([side.name+side.rot for side in sides])))
+
+    def __str__(self):
+        return " ".join([side.name+side.rot for side in sides])
 
     def getPlace(self, placeid, rot=ROT_NONE):
         return self.sides[self.byid[placeid]].rotated(rot)
@@ -187,6 +201,7 @@ class Arrangement(object):
             for placeid in PLACEIDS:
                 line = line.replace(placeid, self.getPlace(placeid).name)
             return line
+
         substitution = [ substitute(line) for line in layout ]
         blocksize = len(self.sides[0].getEdge(DIR_TOP))
         outlines = [ {} for i in range(blocksize * len(layout)) ]
@@ -210,6 +225,15 @@ class Arrangement(object):
 
         return "\n".join(substitution + outlines)
 
+    def check(self, rules):
+        score = 0
+        for rule in rules:
+            if not rule.check(self):
+                return rule, score
+            else:
+                score += 1
+        return None
+
 
 class Rule(object):
     def check(self, arrangement):
@@ -220,6 +244,9 @@ class VerticalRule(Rule):
     def __init__(self, top_place, bottom_place):
         self.top = top_place
         self.bottom = bottom_place
+
+    def __str__(self):
+        return "V %s %s"%(self.top, self.bottom,)
     
     def check(self, arrangement):
         top = arrangement.getPlace(self.top)
@@ -233,6 +260,9 @@ class HorizontalRule(Rule):
     def __init__(self, left_place, left_rot, right_place, right_rot):
         self.left, self.lrot = left_place, left_rot
         self.right, self.rrot = right_place, right_rot
+
+    def __str__(self):
+        return "H %s %s"%(self.left, self.right,)
 
     def check(self, arrangement):
         left = arrangement.getPlace(self.left, self.lrot)
@@ -283,5 +313,32 @@ while line:
     print_layout.append(line)
     line = get_line()
 
-arr = Arrangement(sides)
-print(arr.dump(print_layout))
+def arrangement_generation(original_sides):
+    siderefs = range(len(original_sides))
+    for sidepermutation in itertools.permutations(siderefs):
+        #for rotations in itertools.product(ROTATIONS, ROTATIONS,ROTATIONS, ROTATIONS,  ROTATIONS, ROTATIONS):
+        for rotations in itertools.product(NO_ROTATIONS, NO_ROTATIONS,NO_ROTATIONS, NO_ROTATIONS,  NO_ROTATIONS, NO_ROTATIONS):
+            sides = [ original_sides[i].rotated(rotations[i]) for i in sidepermutation ]
+            yield Arrangement(sides)
+
+#limit = 8
+limit = 9999
+best_score = -1
+best_arrangement = None
+for arr in arrangement_generation(sides):
+    #arr = Arrangement(sides)
+    check = arr.check(rules)
+    if not check:
+        best_score, best_arrangement = 9999, arr
+        break
+    else:
+        rule, score = check 
+        #print("Arrangement %s scored %d, failed rule check %s"%(arr, score, rule,))
+        if score > best_score:
+            best_score, best_arrangement = score, arr
+    limit -= 1
+    if limit <= 0: break
+
+print("Best score: %d"%best_score)
+print(best_arrangement.dump(print_layout))
+
