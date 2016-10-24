@@ -4,52 +4,60 @@ import itertools
 
 PLACEIDS = 'ABCDEF'
 
-ROT_NONE = ""
-ROT_CLOCKW = "-90"
-ROT_COUNTER= "+90"
-ROT_180DEG = "180"
-ROTATIONS = ( ROT_NONE, ROT_CLOCKW, ROT_180DEG, ROT_COUNTER, )
-NO_ROTATIONS = ( ROT_NONE, )
-ROTATION_FROM_CODE = { '+' : ROT_CLOCKW, '-' : ROT_COUNTER, 'r' : ROT_180DEG }
+class ROT(object):
+    def __init__(self, code): self.code = code
+
+ROT.NONE = ROT("")
+ROT.CLOCKW = ROT("-90")
+ROT.COUNTER = ROT("+90")
+ROT.DEG180 = ROT("180")
+
+ROT.ALL = ( ROT.NONE, ROT.CLOCKW, ROT.DEG180, ROT.COUNTER, )
+ROT.SINGLE = ( ROT.NONE, )
+ROTATION_FROM_CODE = { '+' : ROT.CLOCKW, '-' : ROT.COUNTER, 'r' : ROT.DEG180 }
 ROTATION_CODES = "".join(ROTATION_FROM_CODE.keys())
-ROTATION_VALUES = {
-    ROT_COUNTER: -1,
-    ROT_NONE: 0,
-    ROT_CLOCKW: 1,
-    ROT_180DEG: 2,
+ROT.VALUES = {
+    ROT.COUNTER: -1,
+    ROT.NONE: 0,
+    ROT.CLOCKW: 1,
+    ROT.DEG180: 2,
     }
 
-ROT_REV = {
-    ROT_NONE: ROT_NONE,
-    ROT_CLOCKW: ROT_COUNTER,
-    ROT_COUNTER: ROT_CLOCKW,
-    ROT_180DEG: ROT_180DEG,
+ROT.REV = {
+    ROT.NONE: ROT.NONE,
+    ROT.CLOCKW: ROT.COUNTER,
+    ROT.COUNTER: ROT.CLOCKW,
+    ROT.DEG180: ROT.DEG180,
     }
 
-ROT_NEXT = {}
-prevrot = ROTATIONS[-1]
-for rot in ROTATIONS:
-    ROT_NEXT[prevrot] = rot
+ROT.NEXT = {}
+prevrot = ROT.ALL[-1]
+for rot in ROT.ALL:
+    ROT.NEXT[prevrot] = rot
     prevrot = rot
 
-DIR_TOP = "TOP"
-DIR_LEFT = "LEFT"
-DIR_RIGHT = "RIGHT"
-DIR_BOTTOM = "BOTTOM"
-DIRECTIONS = ( DIR_TOP, DIR_RIGHT, DIR_BOTTOM, DIR_LEFT, )
-DIR_VALUES = dict([(x[1],x[0]) for x in enumerate(DIRECTIONS)]) 
+class DIR(object):
+    def __init__(self, code): self.code = code
+
+DIR.TOP = "TOP"
+DIR.LEFT = "LEFT"
+DIR.RIGHT = "RIGHT"
+DIR.BOTTOM = "BOTTOM"
+
+DIR.ALL = ( DIR.TOP, DIR.RIGHT, DIR.BOTTOM, DIR.LEFT, )
+DIR.VALUES = dict([(x[1],x[0]) for x in enumerate(DIR.ALL)]) 
 
 def rotate_direction(direction, rot):
-    dirval = (DIR_VALUES[direction] + ROTATION_VALUES[rot])%len(DIRECTIONS)
-    return DIRECTIONS[dirval]
+    dirval = (DIR.VALUES[direction] + ROT.VALUES[rot])%len(DIR.ALL)
+    return DIR.ALL[dirval]
 
-DIR_OPS = {}
-for direction in DIRECTIONS:
-    DIR_OPS[direction] = {}
-    for rot in ROTATIONS:
-        DIR_OPS[direction][rot] = rotate_direction(direction, rot)
+DIR.OPS = {}
+for direction in DIR.ALL:
+    DIR.OPS[direction] = {}
+    for rot in ROT.ALL:
+        DIR.OPS[direction][rot] = rotate_direction(direction, rot)
 
-#in the order of DIRECTIONS on both axes
+#in the order of DIR.ALL on both axes
 EDGE_TRANSITION_MATRIX_RAW = """
 ++--
 ++--
@@ -59,9 +67,9 @@ EDGE_TRANSITION_MATRIX_RAW = """
 EDGE_TRANSITION_STEP = { '-' : -1, '+': +1, }
 EDGE_TRANSITION_MATRIX_RAW = [ [ EDGE_TRANSITION_STEP[ch] for ch in line.strip()] for line in EDGE_TRANSITION_MATRIX_RAW.splitlines() if line ]
 EDGE_TRANSITION_MATRIX = {}
-for col,d1 in enumerate(DIRECTIONS):
+for col,d1 in enumerate(DIR.ALL):
     EDGE_TRANSITION_MATRIX[d1] = {}
-    for row,d2 in enumerate(DIRECTIONS):
+    for row,d2 in enumerate(DIR.ALL):
         EDGE_TRANSITION_MATRIX[d1][d2] = EDGE_TRANSITION_MATRIX_RAW[col][row]
         
 class Edge(object):
@@ -93,31 +101,31 @@ class Edge(object):
 class Side(object):
     def __init__(self, name, edges):
        self.name = name
-       self.left = edges[DIR_LEFT]
-       self.right = edges[DIR_RIGHT]
-       self.top = edges[DIR_TOP]
-       self.bottom = edges[DIR_BOTTOM]
+       self.left = edges[DIR.LEFT]
+       self.right = edges[DIR.RIGHT]
+       self.top = edges[DIR.TOP]
+       self.bottom = edges[DIR.BOTTOM]
        #self.edges = [ self.top, self.right, self.bottom, self.left, ]
        self.edges = edges
-       self.rot = ROT_NONE
+       self.rot = ROT.NONE
        self.size = len(self.top)
 
     def getEdge(self, direction):
-        return self.edges[DIR_OPS[direction][self.rot]]
+        return self.edges[DIR.OPS[direction][self.rot]]
 
     def rotated(self, target_rot):
-        rot = ROT_NONE
+        rot = ROT.NONE
         edge_clones = [ edge.clone() for edge in self.edges.values() ]
 
         while rot != target_rot:
             new_edges = []
             for edge in edge_clones:
-                newdir = DIR_OPS[edge.direction][ROT_CLOCKW]
+                newdir = DIR.OPS[edge.direction][ROT.CLOCKW]
                 transition = EDGE_TRANSITION_MATRIX[edge.direction][newdir]
                 newedge = Edge(edge.pixel[::transition], newdir)
                 new_edges.append(newedge)
             edge_clones = new_edges
-            rot = ROT_NEXT[rot]
+            rot = ROT.NEXT[rot]
         edgeclones = dict( [ (edge.direction, edge) for edge in edge_clones ] )
         #print("Old edges: %s"%self.edges)
         #print("New edges: %s"%edgeclones)
@@ -230,10 +238,10 @@ for i in range(sidecount):
     edge_left = [ lines[x][0] for x in range(edgesize) ]
     edge_right = [ lines[x][-1] for x in range(edgesize) ]
     edges = { 
-        DIR_TOP: Edge(edge_top, DIR_TOP),
-        DIR_RIGHT: Edge(edge_right, DIR_RIGHT),
-        DIR_BOTTOM: Edge(edge_bottom, DIR_BOTTOM),
-        DIR_LEFT: Edge(edge_left, DIR_LEFT),
+        DIR.TOP: Edge(edge_top, DIR.TOP),
+        DIR.RIGHT: Edge(edge_right, DIR.RIGHT),
+        DIR.BOTTOM: Edge(edge_bottom, DIR.BOTTOM),
+        DIR.LEFT: Edge(edge_left, DIR.LEFT),
         }
     side = Side(name, edges)
     sides.append(side)
@@ -250,7 +258,7 @@ class Arrangement(object):
     def __str__(self):
         return " ".join([side.name+side.rot for side in sides])
 
-    def getPlace(self, placeid, rot=ROT_NONE):
+    def getPlace(self, placeid, rot=ROT.NONE):
         return self.sides[self.byid[placeid]].rotated(rot)
 
     def dump(self, layout):
@@ -258,7 +266,7 @@ class Arrangement(object):
         for placeid in PLACEIDS:
             substDict[placeid] = self.getPlace(placeid).shortStr()
         substitution = [ "".join([ substDict[ch] for ch in line]) for line in layout ]
-        blocksize = len(self.sides[0].getEdge(DIR_TOP))
+        blocksize = len(self.sides[0].getEdge(DIR.TOP))
         outlines = [ {} for i in range((blocksize+1) * len(layout)) ]
         for line_nr, line in enumerate(layout):
             for block_nr, placeid in enumerate(line):
@@ -312,8 +320,8 @@ class VerticalRule(Rule):
     def check(self, arrangement):
         top = arrangement.getPlace(self.top)
         bottom = arrangement.getPlace(self.bottom)
-        edge_from_top = top.getEdge(DIR_BOTTOM)
-        edge_from_bottom = bottom.getEdge(DIR_TOP)
+        edge_from_top = top.getEdge(DIR.BOTTOM)
+        edge_from_bottom = bottom.getEdge(DIR.TOP)
         return edge_from_top.matches(edge_from_bottom)
         
 
@@ -328,8 +336,8 @@ class HorizontalRule(Rule):
     def check(self, arrangement):
         left = arrangement.getPlace(self.left, self.lrot)
         right = arrangement.getPlace(self.right, self.rrot)
-        edge_from_left = left.getEdge(DIR_RIGHT)
-        edge_from_right = right.getEdge(DIR_LEFT)
+        edge_from_left = left.getEdge(DIR.RIGHT)
+        edge_from_right = right.getEdge(DIR.LEFT)
         return edge_from_left.matches(edge_from_right)
 
 
@@ -347,7 +355,7 @@ horizontal_rule_count = int(get_line())
 for rulestr in get_line().split():
     left_place = rulestr[0]
     if rulestr[1] in PLACEIDS:
-        left_rot = ROT_NONE
+        left_rot = ROT.NONE
         right_start = 1
         
     elif rulestr[1] in ROTATION_CODES:
@@ -362,7 +370,7 @@ for rulestr in get_line().split():
         right_rot = ROTATION_FROM_CODE[rulestr[right_start+1]]
         endindex = right_start+2
     else:
-        right_rot = ROT_NONE
+        right_rot = ROT.NONE
         endindex = right_start
 
     rules.append(HorizontalRule(left_place, left_rot, right_place, right_rot))
@@ -379,8 +387,8 @@ def arrangement_generation(original_sides):
     for sidepermutation in itertools.permutations(siderefs):
         if sidepermutation[0] != 0:
             continue # let's fix one side
-        #for rotations in itertools.product(NO_ROTATIONS, ROTATIONS, ROTATIONS, ROTATIONS,  ROTATIONS, ROTATIONS):
-        for rotations in itertools.product(NO_ROTATIONS, NO_ROTATIONS, NO_ROTATIONS, NO_ROTATIONS,  NO_ROTATIONS, NO_ROTATIONS):
+        #for rotations in itertools.product(ROT.SINGLE, ROT.ALL, ROT.ALL, ROT.ALL, ROT.ALL, ROT.ALL):
+        for rotations in itertools.product(ROT.SINGLE, ROT.SINGLE, ROT.SINGLE, ROT.SINGLE, ROT.SINGLE, ROT.SINGLE):
             sides = [ original_sides[i].rotated(rotations[i]) for i in sidepermutation ]
             yield Arrangement(sides)
 
