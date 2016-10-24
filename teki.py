@@ -8,7 +8,7 @@ ROT_NONE = ""
 ROT_CLOCKW = "-90"
 ROT_COUNTER= "+90"
 ROT_180DEG = "180"
-ROTATIONS = ( ROT_NONE, ROT_CLOCKW, ROT_COUNTER, ROT_180DEG, )
+ROTATIONS = ( ROT_NONE, ROT_CLOCKW, ROT_180DEG, ROT_COUNTER, )
 NO_ROTATIONS = ( ROT_NONE, )
 ROTATION_FROM_CODE = { '+' : ROT_CLOCKW, '-' : ROT_COUNTER, 'r' : ROT_180DEG }
 ROTATION_CODES = "".join(ROTATION_FROM_CODE.keys())
@@ -25,6 +25,12 @@ ROT_REV = {
     ROT_COUNTER: ROT_CLOCKW,
     ROT_180DEG: ROT_180DEG,
     }
+
+ROT_NEXT = {}
+prevrot = ROTATIONS[-1]
+for rot in ROTATIONS:
+    ROT_NEXT[prevrot] = rot
+    prevrot = rot
 
 DIR_TOP = "TOP"
 DIR_LEFT = "LEFT"
@@ -43,10 +49,25 @@ for direction in DIRECTIONS:
     for rot in ROTATIONS:
         DIR_OPS[direction][rot] = rotate_direction(direction, rot)
 
-
+#in the order of DIRECTIONS on both axes
+EDGE_TRANSITION_MATRIX_RAW = """
+++--
+++--
+--++
+--++
+"""
+EDGE_TRANSITION_STEP = { '-' : -1, '+': +1, }
+EDGE_TRANSITION_MATRIX_RAW = [ [ EDGE_TRANSITION_STEP[ch] for ch in line.strip()] for line in EDGE_TRANSITION_MATRIX_RAW.splitlines() if line ]
+EDGE_TRANSITION_MATRIX = {}
+for col,d1 in enumerate(DIRECTIONS):
+    EDGE_TRANSITION_MATRIX[d1] = {}
+    for row,d2 in enumerate(DIRECTIONS):
+        EDGE_TRANSITION_MATRIX[d1][d2] = EDGE_TRANSITION_MATRIX_RAW[col][row]
+        
 class Edge(object):
     def __init__(self, str_rep, direction):
         self.pixel = [ x for x in str_rep ]
+        self.direction = direction
 
     def __len__(self):
         return len(self.pixel)
@@ -57,9 +78,17 @@ class Edge(object):
                 return False
         return True
 
+    def clone(self):
+        return Edge(self.pixel, self.direction)
+
     def getDisplayChar(self, i):
         return self.pixel[i]
 
+    def __str__(self):
+        return "".join(self.pixel)
+
+    def __repr__(self):
+        return str(self)
 
 class Side(object):
     def __init__(self, name, edges):
@@ -76,11 +105,24 @@ class Side(object):
     def getEdge(self, direction):
         return self.edges[DIR_OPS[direction][self.rot]]
 
-    def rotated(self, rot):
-        #TODO
-        edgeclones = self.edges.copy()
+    def rotated(self, target_rot):
+        rot = ROT_NONE
+        edge_clones = [ edge.clone() for edge in self.edges.values() ]
+
+        while rot != target_rot:
+            new_edges = []
+            for edge in edge_clones:
+                newdir = DIR_OPS[edge.direction][ROT_CLOCKW]
+                transition = EDGE_TRANSITION_MATRIX[edge.direction][newdir]
+                newedge = Edge(edge.pixel[::transition], newdir)
+                new_edges.append(newedge)
+            edge_clones = new_edges
+            rot = ROT_NEXT[rot]
+        edgeclones = dict( [ (edge.direction, edge) for edge in edge_clones ] )
+        #print("Old edges: %s"%self.edges)
+        #print("New edges: %s"%edgeclones)
         clone = Side(self.name, edgeclones)
-        clone.rot = rot
+        clone.rot = target_rot
         return clone
 
     def getDisplayChar(self, x, y):
@@ -91,7 +133,23 @@ class Side(object):
         if x == self.size-1: return self.right.getDisplayChar(y)
         if y == self.size-1: return self.bottom.getDisplayChar(x)
         return "?"
+
+    def __str__(self):
+        lines = ["Side %s (rot=%s):"%(self.name, self.rot,)]
+        for y in range(self.size):
+            line = [ self.getDisplayChar(x,y) for x in range(self.size) ]
+            lines.append("".join(line))
+        return "\n".join(lines)
         
+simpleHRules = """
+2
+BC CD
+"""
+allHRules = """
+8
+BC CD B+A A+D B-E ED+ FrB DFr
+"""
+
 raw = """
 6 6
 1
@@ -139,16 +197,11 @@ XX  X
 4
 A C E F
 C E F A
-2
-BC CD
+""" + allHRules + """ 
  A
 BCD
  E
  F
-"""
-allHRules = """
-8
-BC CD B+A A+D B-E ED+ FrB DFr
 """
 
 def linefeed_generator():
@@ -204,7 +257,7 @@ class Arrangement(object):
 
         substitution = [ substitute(line) for line in layout ]
         blocksize = len(self.sides[0].getEdge(DIR_TOP))
-        outlines = [ {} for i in range(blocksize * len(layout)) ]
+        outlines = [ {} for i in range((blocksize+1) * len(layout)) ]
         for line_nr, line in enumerate(layout):
             for block_nr, placeid in enumerate(line):
                 if placeid in PLACEIDS:
@@ -212,8 +265,11 @@ class Arrangement(object):
                     for y in range(blocksize):
                         for x in range(blocksize):
                             ch = side.getDisplayChar(x,y)
-                            outlines[line_nr*blocksize+y][block_nr*blocksize+x] = ch
+                            outlines[line_nr*(blocksize+1)+y][block_nr*(blocksize+1)+x] = ch
+
         def toline(chdict):
+            if not chdict:
+                return ""
             maxpos = max(chdict.keys())
             line = [ " " for i in range(maxpos+1) ]
             for i, ch in chdict.items():
@@ -225,14 +281,17 @@ class Arrangement(object):
 
         return "\n".join(substitution + outlines)
 
-    def check(self, rules):
+    def check(self, rules, no_compromises = False):
+        violations = []
         score = 0
         for rule in rules:
             if not rule.check(self):
-                return rule, score
+                violations.append(rule)
+                if no_compromises:
+                    break
             else:
                 score += 1
-        return None
+        return violations, score
 
 
 class Rule(object):
@@ -316,26 +375,29 @@ while line:
 def arrangement_generation(original_sides):
     siderefs = range(len(original_sides))
     for sidepermutation in itertools.permutations(siderefs):
-        #for rotations in itertools.product(ROTATIONS, ROTATIONS,ROTATIONS, ROTATIONS,  ROTATIONS, ROTATIONS):
-        for rotations in itertools.product(NO_ROTATIONS, NO_ROTATIONS,NO_ROTATIONS, NO_ROTATIONS,  NO_ROTATIONS, NO_ROTATIONS):
+        if sidepermutation[0] != 0:
+            continue # let's fix one side
+        for rotations in itertools.product(NO_ROTATIONS, ROTATIONS,ROTATIONS, ROTATIONS,  ROTATIONS, ROTATIONS):
+        #for rotations in itertools.product(NO_ROTATIONS, NO_ROTATIONS,NO_ROTATIONS, NO_ROTATIONS,  NO_ROTATIONS, NO_ROTATIONS):
             sides = [ original_sides[i].rotated(rotations[i]) for i in sidepermutation ]
             yield Arrangement(sides)
+
+test_side = sides[0]
+print(test_side)
+ts_cw = test_side.rotated(ROT_COUNTER)
+print(ts_cw)
 
 #limit = 8
 limit = 9999
 best_score = -1
 best_arrangement = None
 for arr in arrangement_generation(sides):
-    #arr = Arrangement(sides)
-    check = arr.check(rules)
-    if not check:
-        best_score, best_arrangement = 9999, arr
-        break
-    else:
-        rule, score = check 
-        #print("Arrangement %s scored %d, failed rule check %s"%(arr, score, rule,))
-        if score > best_score:
-            best_score, best_arrangement = score, arr
+    check = arr.check(rules, True)
+    violations, score = check 
+    #if violations:
+    #    print("Arrangement %s scored %d, failed rule check %s"%(arr, score, violations,))
+    if score > best_score:
+        best_score, best_arrangement = score, arr
     limit -= 1
     if limit <= 0: break
 
