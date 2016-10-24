@@ -135,11 +135,15 @@ class Side(object):
         return "?"
 
     def __str__(self):
-        lines = ["Side %s (rot=%s):"%(self.name, self.rot,)]
+        lines = [self.shortStr()]
         for y in range(self.size):
             line = [ self.getDisplayChar(x,y) for x in range(self.size) ]
             lines.append("".join(line))
         return "\n".join(lines)
+
+    shortStrWidth = 15
+    def shortStr(self):
+        return ("Side %s (rot=%s):"%(self.name, self.rot,)).ljust(Side.shortStrWidth)
         
 simpleHRules = """
 2
@@ -197,7 +201,7 @@ XX  X
 4
 A C E F
 C E F A
-""" + allHRules + """ 
+""" + simpleHRules + """ 
  A
 BCD
  E
@@ -250,12 +254,10 @@ class Arrangement(object):
         return self.sides[self.byid[placeid]].rotated(rot)
 
     def dump(self, layout):
-        def substitute(line):
-            for placeid in PLACEIDS:
-                line = line.replace(placeid, self.getPlace(placeid).name)
-            return line
-
-        substitution = [ substitute(line) for line in layout ]
+        substDict = {" ": ' '*Side.shortStrWidth}
+        for placeid in PLACEIDS:
+            substDict[placeid] = self.getPlace(placeid).shortStr()
+        substitution = [ "".join([ substDict[ch] for ch in line]) for line in layout ]
         blocksize = len(self.sides[0].getEdge(DIR_TOP))
         outlines = [ {} for i in range((blocksize+1) * len(layout)) ]
         for line_nr, line in enumerate(layout):
@@ -377,30 +379,26 @@ def arrangement_generation(original_sides):
     for sidepermutation in itertools.permutations(siderefs):
         if sidepermutation[0] != 0:
             continue # let's fix one side
-        for rotations in itertools.product(NO_ROTATIONS, ROTATIONS,ROTATIONS, ROTATIONS,  ROTATIONS, ROTATIONS):
-        #for rotations in itertools.product(NO_ROTATIONS, NO_ROTATIONS,NO_ROTATIONS, NO_ROTATIONS,  NO_ROTATIONS, NO_ROTATIONS):
+        #for rotations in itertools.product(NO_ROTATIONS, ROTATIONS, ROTATIONS, ROTATIONS,  ROTATIONS, ROTATIONS):
+        for rotations in itertools.product(NO_ROTATIONS, NO_ROTATIONS, NO_ROTATIONS, NO_ROTATIONS,  NO_ROTATIONS, NO_ROTATIONS):
             sides = [ original_sides[i].rotated(rotations[i]) for i in sidepermutation ]
             yield Arrangement(sides)
 
-test_side = sides[0]
-print(test_side)
-ts_cw = test_side.rotated(ROT_COUNTER)
-print(ts_cw)
+if __name__ == '__main__':
+    #limit = 8
+    limit = 9999
+    best_score = -1
+    best_arrangement = None
+    for arr in arrangement_generation(sides):
+        check = arr.check(rules, True)
+        violations, score = check 
+        #if violations:
+        #    print("Arrangement %s scored %d, failed rule check %s"%(arr, score, violations,))
+        if score > best_score:
+            best_score, best_arrangement = score, arr
+        limit -= 1
+        if limit <= 0: break
 
-#limit = 8
-limit = 9999
-best_score = -1
-best_arrangement = None
-for arr in arrangement_generation(sides):
-    check = arr.check(rules, True)
-    violations, score = check 
-    #if violations:
-    #    print("Arrangement %s scored %d, failed rule check %s"%(arr, score, violations,))
-    if score > best_score:
-        best_score, best_arrangement = score, arr
-    limit -= 1
-    if limit <= 0: break
-
-print("Best score: %d"%best_score)
-print(best_arrangement.dump(print_layout))
+    print("Best score: %d"%best_score)
+    print(best_arrangement.dump(print_layout))
 
