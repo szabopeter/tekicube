@@ -1,0 +1,51 @@
+Improvement! score = 2
+Improvement! score = 3
+Improvement! score = 4
+Improvement! score = 5
+Improvement! score = 6
+Best score: 6
+
+                         1 (rot=):
+2 (rot=):                4 (rot=):                5 (rot=):
+                         6 (rot=):
+                         3 (rot=):
+
+
+
+
+
+
+
+       X XX X
+       XOOOOX
+        OOOO
+        OOOO
+       XOOOOX
+         XX
+
+  XX   XX  XX   XX
+ OOOO  XOOOO  XOOOOX
+XOOOOX  OOOOX  OOOO
+XOOOOX  OOOOX  OOOO
+ OOOO  XOOOO  XOOOOX
+  XX    X  X  X XX
+
+       X XX
+       XOOOOX
+        OOOO
+        OOOO
+       XOOOOX
+       XX  XX
+
+         XX
+        OOOOX
+       XOOOO
+       XOOOO
+        OOOOX
+        X  X
+
+
+real    2m54.957s
+user    2m46.740s
+sys     0m0.570s
+

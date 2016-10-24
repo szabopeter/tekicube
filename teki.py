@@ -6,6 +6,7 @@ PLACEIDS = 'ABCDEF'
 
 class ROT(object):
     def __init__(self, code): self.code = code
+    def __str__(self): return self.code
 
 ROT.NONE = ROT("")
 ROT.CLOCKW = ROT("-90")
@@ -14,8 +15,8 @@ ROT.DEG180 = ROT("180")
 
 ROT.ALL = ( ROT.NONE, ROT.CLOCKW, ROT.DEG180, ROT.COUNTER, )
 ROT.SINGLE = ( ROT.NONE, )
-ROTATION_FROM_CODE = { '+' : ROT.CLOCKW, '-' : ROT.COUNTER, 'r' : ROT.DEG180 }
-ROTATION_CODES = "".join(ROTATION_FROM_CODE.keys())
+ROT.FROM_CODE = { '+' : ROT.CLOCKW, '-' : ROT.COUNTER, 'r' : ROT.DEG180 }
+ROTATION_CODES = "".join(ROT.FROM_CODE.keys())
 ROT.VALUES = {
     ROT.COUNTER: -1,
     ROT.NONE: 0,
@@ -38,6 +39,7 @@ for rot in ROT.ALL:
 
 class DIR(object):
     def __init__(self, code): self.code = code
+    def __str__(self): return self.code
 
 DIR.TOP = "TOP"
 DIR.LEFT = "LEFT"
@@ -111,7 +113,7 @@ class Side(object):
        self.size = len(self.top)
 
     def getEdge(self, direction):
-        return self.edges[DIR.OPS[direction][self.rot]]
+        return self.edges[direction]
 
     def rotated(self, target_rot):
         rot = ROT.NONE
@@ -127,10 +129,12 @@ class Side(object):
             edge_clones = new_edges
             rot = ROT.NEXT[rot]
         edgeclones = dict( [ (edge.direction, edge) for edge in edge_clones ] )
-        #print("Old edges: %s"%self.edges)
+        #print("\nOld edges: %s"%self.edges)
         #print("New edges: %s"%edgeclones)
         clone = Side(self.name, edgeclones)
         clone.rot = target_rot
+        #print(self)
+        #print(clone)
         return clone
 
     def getDisplayChar(self, x, y):
@@ -149,9 +153,24 @@ class Side(object):
             lines.append("".join(line))
         return "\n".join(lines)
 
-    shortStrWidth = 15
+    shortStrWidth = 80 // 3 - 1
     def shortStr(self):
-        return ("Side %s (rot=%s):"%(self.name, self.rot,)).ljust(Side.shortStrWidth)
+        return ("%s (rot=%s):"%(self.name, self.rot,)).ljust(Side.shortStrWidth)
+
+    @staticmethod
+    def parse(name, lines, edgesize):
+        lines = [ line for line in lines if line.strip() ]
+        edge_top = [ lines[0][x] for x in range(edgesize) ]
+        edge_bottom = [ lines[-1][x] for x in range(edgesize) ]
+        edge_left = [ lines[x][0] for x in range(edgesize) ]
+        edge_right = [ lines[x][-1] for x in range(edgesize) ]
+        edges = { 
+            DIR.TOP: Edge(edge_top, DIR.TOP),
+            DIR.RIGHT: Edge(edge_right, DIR.RIGHT),
+            DIR.BOTTOM: Edge(edge_bottom, DIR.BOTTOM),
+            DIR.LEFT: Edge(edge_left, DIR.LEFT),
+            }
+        return Side(name, edges)
         
 simpleHRules = """
 2
@@ -167,49 +186,49 @@ raw = """
 1
 X XX X
 XXXXXX
- XXXX
- XXXX
+ XXXX 
+ XXXX 
 XXXXXX
   XX  
 2
-  XX
- XXXX
+  XX  
+ XXXX 
 XXXXXX
 XXXXXX
- XXXX
-  XX
+ XXXX 
+  XX  
 3
- X  X
+ X  X 
  XXXXX
-XXXXX
-XXXXX
+XXXXX 
+XXXXX 
  XXXXX
-  XX
+  XX  
 4
- X  X
+ X  X 
  XXXXX
-XXXXX
-XXXXX
+XXXXX 
+XXXXX 
  XXXXX
 XX  XX
 5
-XX  X
- XXXX
+XX  X 
+ XXXX 
 XXXXXX
 XXXXXX
- XXXX
- X  X
+ XXXX 
+ X  X 
 6
 XX  XX
-XXXXX
+XXXXX 
  XXXXX
  XXXXX
-XXXXX
-XX  X
+XXXXX 
+XX  X 
 4
 A C E F
 C E F A
-""" + simpleHRules + """ 
+""" + allHRules + """ 
  A
 BCD
  E
@@ -233,17 +252,7 @@ sides = []
 for i in range(sidecount):
     name = get_line()
     lines = [ get_line().ljust(edgesize) for j in range(edgesize) ]
-    edge_top = [ lines[0][x] for x in range(edgesize) ]
-    edge_bottom = [ lines[-1][x] for x in range(edgesize) ]
-    edge_left = [ lines[x][0] for x in range(edgesize) ]
-    edge_right = [ lines[x][-1] for x in range(edgesize) ]
-    edges = { 
-        DIR.TOP: Edge(edge_top, DIR.TOP),
-        DIR.RIGHT: Edge(edge_right, DIR.RIGHT),
-        DIR.BOTTOM: Edge(edge_bottom, DIR.BOTTOM),
-        DIR.LEFT: Edge(edge_left, DIR.LEFT),
-        }
-    side = Side(name, edges)
+    side = Side.parse(name, lines, edgesize)
     sides.append(side)
 
 
@@ -359,7 +368,7 @@ for rulestr in get_line().split():
         right_start = 1
         
     elif rulestr[1] in ROTATION_CODES:
-        left_rot = ROTATION_FROM_CODE[rulestr[1]]
+        left_rot = ROT.FROM_CODE[rulestr[1]]
         right_start = 2
     else:
         print("Invalid rule specification: " + rulestr)
@@ -367,7 +376,7 @@ for rulestr in get_line().split():
 
     right_place = rulestr[right_start]
     if right_start+1 < len(rulestr) and rulestr[right_start+1] in ROTATION_CODES:
-        right_rot = ROTATION_FROM_CODE[rulestr[right_start+1]]
+        right_rot = ROT.FROM_CODE[rulestr[right_start+1]]
         endindex = right_start+2
     else:
         right_rot = ROT.NONE
@@ -387,8 +396,8 @@ def arrangement_generation(original_sides):
     for sidepermutation in itertools.permutations(siderefs):
         if sidepermutation[0] != 0:
             continue # let's fix one side
-        #for rotations in itertools.product(ROT.SINGLE, ROT.ALL, ROT.ALL, ROT.ALL, ROT.ALL, ROT.ALL):
-        for rotations in itertools.product(ROT.SINGLE, ROT.SINGLE, ROT.SINGLE, ROT.SINGLE, ROT.SINGLE, ROT.SINGLE):
+        for rotations in itertools.product(ROT.SINGLE, ROT.ALL, ROT.ALL, ROT.ALL, ROT.ALL, ROT.ALL):
+        #for rotations in itertools.product(ROT.SINGLE, ROT.SINGLE, ROT.SINGLE, ROT.SINGLE, ROT.SINGLE, ROT.SINGLE):
             sides = [ original_sides[i].rotated(rotations[i]) for i in sidepermutation ]
             yield Arrangement(sides)
 
@@ -398,12 +407,14 @@ if __name__ == '__main__':
     best_score = -1
     best_arrangement = None
     for arr in arrangement_generation(sides):
-        check = arr.check(rules, True)
+        check = arr.check(rules, False)
         violations, score = check 
         #if violations:
         #    print("Arrangement %s scored %d, failed rule check %s"%(arr, score, violations,))
         if score > best_score:
             best_score, best_arrangement = score, arr
+            print("Improvement! score = %d"%score)
+            arr.dump(print_layout)
         limit -= 1
         if limit <= 0: break
 
