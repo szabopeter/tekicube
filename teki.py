@@ -99,7 +99,7 @@ class Edge(object):
                 step = -1
         otherpixels = other.pixel[::step]
         for i in range(len(self.pixel)):
-            if self.pixel[i] == otherpixels[i]:
+            if self.pixel[i] != ' ' and self.pixel[i] == otherpixels[i]:
                 return False
         return True
 
@@ -131,6 +131,7 @@ class Side(object):
         return self.edges[direction]
 
     def rotated(self, target_rot):
+        clonerot = self.rot
         rot = ROT.NONE
         edge_clones = [ edge.clone() for edge in self.edges.values() ]
 
@@ -143,11 +144,12 @@ class Side(object):
                 new_edges.append(newedge)
             edge_clones = new_edges
             rot = ROT.NEXT[rot]
+            clonerot = ROT.NEXT[clonerot]
         edgeclones = dict( [ (edge.direction, edge) for edge in edge_clones ] )
         #print("\nOld edges: %s"%self.edges)
         #print("New edges: %s"%edgeclones)
         clone = Side(self.name, edgeclones)
-        clone.rot = target_rot
+        clone.rot = clonerot
         #print(self)
         #print(clone)
         return clone
@@ -170,7 +172,7 @@ class Side(object):
 
     shortStrWidth = 80 // 3 - 1
     def shortStr(self):
-        return ("%s (rot=%s):"%(self.name, self.rot,)).ljust(Side.shortStrWidth)
+        return ("%s (rot=%s)"%(self.name, self.rot,)).center(Side.shortStrWidth)
 
     @staticmethod
     def parse(name, lines, edgesize):
@@ -416,27 +418,32 @@ def arrangement_generation(original_sides):
             sides = [ original_sides[i].rotated(rotations[i]) for i in sidepermutation ]
             yield Arrangement(sides)
 
+exact_search = True
+
 if __name__ == '__main__':
     #limit = 8
     limit = 9999
     best_score = -1
     best_arrangement = None
     best_rule_violations = []
-    for arr in arrangement_generation(sides):
-        try:
-            check = arr.check(rules, False)
+    try:
+        for arr in arrangement_generation(sides):
+            check = arr.check(rules, exact_search)
             rule_violations, score = check 
             #if rule_violations:
             #    print("Arrangement %s scored %d, failed rule check %s"%(arr, score, rule_violations,))
             if score > best_score:
                 best_score, best_arrangement, best_rule_violations = score, arr, rule_violations
                 print("Improvement! score = %d"%score)
-                arr.dump(print_layout)
+                if score == len(rules):
+                    break
             limit -= 1
             if limit <= 0: break
-        except KeyboardInterrupt:
-            print("Interrupted!")
-            break
+    except KeyboardInterrupt:
+        print("Interrupted!")
+
+    if exact_search and best_rule_violations:
+        best_rule_violations.append("among others.")
 
     print("Best score: %d"%best_score)
     print(best_arrangement.dump(print_layout))

@@ -33,7 +33,21 @@ class TekiTestCase(unittest.TestCase):
     def testEdgeDoesNotMatch_SpaceVsSpace(self):
         e1 = Edge("XX  X ", DIR.TOP)
         e2 = Edge("  XX  ", DIR.BOTTOM)
-        self.assertFalse(e1.matches(e2))
+        self.assertTrue(e1.matches(e2))
+
+    def assertEqualsStripped(self, expected, actual, msg = None):
+        self.assertEquals(expected.strip(), actual.strip(), msg)
+
+    def testSideShortStr_withRotation(self):
+        side = Side("bob", self.makeEdgeDict())
+        self.assertEqualsStripped("bob (rot=)", side.shortStr())
+
+        side = side.rotated(ROT.CLOCKW)
+        self.assertEqualsStripped("bob (rot=-90)", side.shortStr())
+
+        side = side.rotated(ROT.CLOCKW)
+        self.assertEqualsStripped("bob (rot=180)", side.shortStr())
+
 
     def makeEdgeDict(self, *special_edge):
         edges = {}
