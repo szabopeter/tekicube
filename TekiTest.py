@@ -4,9 +4,24 @@ from teki import Edge, Side, Arrangement
 from teki import VerticalRule, HorizontalRule
 from teki import ROT, DIR
 
+def dump(*objects):
+    print()
+    for o in objects:
+        print(str(o))
+
 class TekiTestCase(unittest.TestCase):
-    def testEdgeMatch(self):
+    def testEdgeMatch_parallel(self):
         e1 = Edge("X  XXX", DIR.TOP)
+        e2 = Edge(" XX   ", DIR.BOTTOM)
+        self.assertTrue(e1.matches(e2))
+
+    def testEdgeMatch_orthogonal(self):
+        e1 = Edge("X  XXX", DIR.RIGHT)
+        e2 = Edge("   XX ", DIR.TOP)
+        self.assertTrue(e1.matches(e2))
+
+    def testEdgeMatch_orthogonal2(self):
+        e1 = Edge("X  XXX", DIR.RIGHT)
         e2 = Edge(" XX   ", DIR.BOTTOM)
         self.assertTrue(e1.matches(e2))
 
@@ -42,13 +57,20 @@ class TekiTestCase(unittest.TestCase):
         check = rule.check(Arrangement([leftside, rightside]))
         self.assertTrue(check)
 
-    def testHorizontalRuleMatch_cw(self):
+    def testHorizontalRuleMatch_cw_left(self):
         leftside = Side("left", self.makeEdgeDict(Edge("X  XXX", DIR.TOP)))
         rightside = Side("right", self.makeEdgeDict(Edge(" XX   ", DIR.LEFT)))
         rule = HorizontalRule('A', ROT.FROM_CODE['+'], 'B', ROT.NONE)
         check = rule.check(Arrangement([leftside, rightside]))
         self.assertTrue(check)
 
+    def testHorizontalRuleMatch_ccw_right(self):
+        leftside = Side("left", self.makeEdgeDict(Edge("X  XXX", DIR.RIGHT)))
+        rightside = Side("right", self.makeEdgeDict(Edge("   XX ", DIR.TOP)))
+        rule = HorizontalRule('A', ROT.NONE, 'B', ROT.FROM_CODE['-'])
+        check = rule.check(Arrangement([leftside, rightside]))
+        if not check: dump(leftside, rightside, leftside.getEdge(DIR.RIGHT), rightside.getEdge(DIR.TOP))
+        self.assertTrue(check)
 
     def testEdgeRotation_cw(self):
         side = Side.parse("actual","""

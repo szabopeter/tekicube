@@ -38,13 +38,13 @@ for rot in ROT.ALL:
     prevrot = rot
 
 class DIR(object):
-    def __init__(self, code): self.code = code
+    def __init__(self, code, orientation): self.code, self.orientation = code, orientation
     def __str__(self): return self.code
 
-DIR.TOP = "TOP"
-DIR.LEFT = "LEFT"
-DIR.RIGHT = "RIGHT"
-DIR.BOTTOM = "BOTTOM"
+DIR.TOP = DIR("TOP", "H")
+DIR.LEFT = DIR("LEFT", "V")
+DIR.RIGHT = DIR("RIGHT", "V")
+DIR.BOTTOM = DIR("BOTTOM", "H")
 
 DIR.ALL = ( DIR.TOP, DIR.RIGHT, DIR.BOTTOM, DIR.LEFT, )
 DIR.VALUES = dict([(x[1],x[0]) for x in enumerate(DIR.ALL)]) 
@@ -58,6 +58,10 @@ for direction in DIR.ALL:
     DIR.OPS[direction] = {}
     for rot in ROT.ALL:
         DIR.OPS[direction][rot] = rotate_direction(direction, rot)
+
+DIR.NEXT = {}
+for d in DIR.ALL:
+    DIR.NEXT[d] = DIR.OPS[d][ROT.CLOCKW]
 
 #in the order of DIR.ALL on both axes
 EDGE_TRANSITION_MATRIX_RAW = """
@@ -73,7 +77,7 @@ for col,d1 in enumerate(DIR.ALL):
     EDGE_TRANSITION_MATRIX[d1] = {}
     for row,d2 in enumerate(DIR.ALL):
         EDGE_TRANSITION_MATRIX[d1][d2] = EDGE_TRANSITION_MATRIX_RAW[col][row]
-        
+
 class Edge(object):
     def __init__(self, str_rep, direction):
         self.pixel = [ x for x in str_rep ]
@@ -82,9 +86,20 @@ class Edge(object):
     def __len__(self):
         return len(self.pixel)
 
-    def matches(self, edge):
+    def matches(self, other):
+        step = 1
+        if self.direction.orientation != other.direction.orientation:
+            reversing = [
+                ( DIR.TOP, DIR.LEFT, ),
+                ( DIR.RIGHT, DIR.TOP, ),
+                ( DIR.BOTTOM, DIR.RIGHT,),
+                ( DIR.LEFT, DIR.BOTTOM,)
+                ]
+            if (self.direction, other.direction, ) in reversing: 
+                step = -1
+        otherpixels = other.pixel[::step]
         for i in range(len(self.pixel)):
-            if self.pixel[i] == edge.pixel[i]:
+            if self.pixel[i] == otherpixels[i]:
                 return False
         return True
 
@@ -178,7 +193,7 @@ BC CD
 """
 allHRules = """
 8
-BC CD B+A A+D B-E ED+ FrB DFr
+BC CD B+A AD- B-E ED+ FrB DFr
 """
 
 raw = """
@@ -301,16 +316,16 @@ class Arrangement(object):
         return "\n".join(substitution + outlines)
 
     def check(self, rules, no_compromises = False):
-        violations = []
+        rule_violations = []
         score = 0
         for rule in rules:
             if not rule.check(self):
-                violations.append(rule)
+                rule_violations.append(rule)
                 if no_compromises:
                     break
             else:
                 score += 1
-        return violations, score
+        return rule_violations, score
 
 
 class Rule(object):
@@ -406,18 +421,25 @@ if __name__ == '__main__':
     limit = 9999
     best_score = -1
     best_arrangement = None
+    best_rule_violations = []
     for arr in arrangement_generation(sides):
-        check = arr.check(rules, False)
-        violations, score = check 
-        #if violations:
-        #    print("Arrangement %s scored %d, failed rule check %s"%(arr, score, violations,))
-        if score > best_score:
-            best_score, best_arrangement = score, arr
-            print("Improvement! score = %d"%score)
-            arr.dump(print_layout)
-        limit -= 1
-        if limit <= 0: break
+        try:
+            check = arr.check(rules, False)
+            rule_violations, score = check 
+            #if rule_violations:
+            #    print("Arrangement %s scored %d, failed rule check %s"%(arr, score, rule_violations,))
+            if score > best_score:
+                best_score, best_arrangement, best_rule_violations = score, arr, rule_violations
+                print("Improvement! score = %d"%score)
+                arr.dump(print_layout)
+            limit -= 1
+            if limit <= 0: break
+        except KeyboardInterrupt:
+            print("Interrupted!")
+            break
 
     print("Best score: %d"%best_score)
     print(best_arrangement.dump(print_layout))
+    for v in best_rule_violations:
+        print(v)
 
