@@ -242,6 +242,49 @@ XXXXX
  XXXXX
 XXXXX 
 XX  X 
+"""
+
+raw = """
+6 5
+1
+ X X 
+ XXX 
+XXXXX
+ XXXX
+  X   
+2
+   XX
+XXXX
+ XXXX
+XXXX
+ X XX
+3
+ X XX
+XXXX 
+ XXXX
+XXXX 
+XX XX
+4
+  X  
+XXXX 
+XXXXX
+ XXX  
+  X  
+5
+  X  
+XXXXX
+ XXX 
+XXXXX
+ X XX
+6
+X X  
+XXXX  
+ XXX
+XXXXX
+X X  
+"""
+
+raw = raw + """
 4
 A C E F
 C E F A
@@ -418,7 +461,7 @@ def arrangement_generation(original_sides):
             sides = [ original_sides[i].rotated(rotations[i]) for i in sidepermutation ]
             yield Arrangement(sides)
 
-exact_search = True
+exact_search = False
 
 if __name__ == '__main__':
     #limit = 8
